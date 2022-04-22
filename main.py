@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import pickle
 
 import model
 import numpy as np
@@ -33,10 +34,10 @@ def force_divisible(frame, cell_size):
     return out
 
 
-def anomaly_detection(video_file: str, parameters_file: str):
+def anomaly_detection(video_file: str, parameters_file: str, output_file: str):
     vidcap = cv2.VideoCapture(video_file)
     parameters = json.load(open(parameters_file, "rb"))
-    print(parameters)
+
     total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
     video_scale = parameters["video_scale"]
     sp_grid_size = parameters["spatial_pooler"]["grid_size"]
@@ -62,8 +63,6 @@ def anomaly_detection(video_file: str, parameters_file: str):
     sp_args.stimulusThreshold = parameters["spatial_pooler"]["stimulus_threshold"]
     sp_args.boostStrength = parameters["spatial_pooler"]["boost_strength"]
     sp_args.dutyCyclePeriod = parameters["spatial_pooler"]["duty_cycle_period"]
-    print(sp_args.globalInhibition)
-    print(sp_args.wrapAround)
 
     tm_args = model.TemporalMemoryArgs()
 
@@ -81,9 +80,10 @@ def anomaly_detection(video_file: str, parameters_file: str):
                              min_sparsity=parameters["grid_htm"]["min_sparsity"], sparsity=parameters["grid_htm"]["sparsity"],
                              aggr_func=aggr_func, temporal_size=parameters["grid_htm"]["temporal_size"])
     frame_skip = parameters["frame_skip"]
-    head, tail = os.path.split(video_file)
+    frame_repeats = parameters["frame_repeats"]
+    frame_repeat_start_idx = parameters["frame_repeat_start_idx"]
 
-    out = cv2.VideoWriter(f'{tail.split(".")[0]}_results.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 10,
+    out = cv2.VideoWriter(f'{output_file}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 10,
                           (new_height, new_width*2), True)
     anoms = []
     raw_anoms = []
@@ -121,20 +121,25 @@ def anomaly_detection(video_file: str, parameters_file: str):
             # Get next frame -------------------------------------------------------------
             # Do not get next frame if it is currently set to be repeating the same frame
             for i in range(frame_skip):
-                success, orig_frame = vidcap.read()
-                orig_frame = concat_seg(orig_frame, success)
+                if bar.value < frame_repeat_start_idx or bar.value >= frame_repeat_start_idx + frame_repeats:
+                    success, orig_frame = vidcap.read()
+                    orig_frame = concat_seg(orig_frame, success)
 
                 bar.update(bar.value + 1)
                 if bar.value == total_frames:
                     break
             if bar.value == total_frames:
                 break
+    dump_data = {"anom_scores": anoms, "raw_anoms": raw_anoms, "x_vals": x_vals}
+    return dump_data
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("video", type=str, help="The segmented video on which to perform anomaly detection.")
     parser.add_argument("params", type=str, help="The parameters file.")
+    parser.add_argument("-o", "--output", type=str, help="Output name.", default="result")
     args = parser.parse_args()
 
-    anomaly_detection(args.video, args.params)
+    data = anomaly_detection(args.video, args.params, args.output)
+    pickle.dump(data, open(f'{args.output}.pkl', 'wb'))

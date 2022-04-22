@@ -2,6 +2,8 @@
   "video_scale": 0.3,
   "frame_skip": 6,
   "seed": 2,
+  "frame_repeats":500,
+  "frame_repeat_start_idx": 139413,
   "grid_htm": {
     "aggr_func": "mean",
     "min_sparsity": 10,
