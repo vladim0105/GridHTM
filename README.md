@@ -1,4 +1,6 @@
 # GridHTM
+![](clip.gif)
+
 This repo depends on htm.core (https://github.com/htm-community/htm.core)
 ### Cloning and Setup
 To clone the repo and htm.core:
